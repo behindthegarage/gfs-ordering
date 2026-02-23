@@ -1,60 +1,46 @@
-# GFS Ordering Module Deployment Notes
+# GFS Ordering — Deployment
 
-## Critical: VPS vs OptiPlex Architecture
+## Deployment (CRITICAL — Read Before Editing)
 
-**ALWAYS deploy to VPS (162.212.153.134) — NOT the OptiPlex!**
+| Field | Value |
+|-------|-------|
+| **Canonical Host** | ✅ **VPS** |
+| **Host IP/Name** | `162.212.153.134` |
+| **Code Path** | `/home/openclaw/gfs-ordering/` |
+| **Repo** | `behindthegarage/gfs-ordering` |
+| **Deploy Method** | Git push → GitHub Actions → auto-deploy |
+| **Domain/URL** | Via Club Kinawa CC integration |
+| **Auth** | CC login required |
 
-The Kinawa Command Center runs on the Cloudfanatic VPS, not the local OptiPlex. The OptiPlex is for OpenClaw/Gateway only.
+**⚠️ Rule:** Always edit on VPS. Never develop locally.
 
-## Deployment Workflow
+## Auto-Deploy Workflow
 
-1. **Make changes** in `/home/openclaw/.openclaw/workspace/kinawa-command-center/`
-2. **Commit & push** to GitHub: `behindthegarage/kinawa-command-center`
-3. **Deploy to VPS**:
-   ```bash
-   ssh openclaw@162.212.153.134
-   cd /home/openclaw/kinawa-command-center
-   git pull origin master
-   sudo systemctl restart kinawa
-   ```
+1. **Edit files on VPS**: `ssh openclaw@162.212.153.134`
+2. **Commit & push** from VPS to GitHub
+3. **GitHub Actions automatically deploys** back to VPS
 
-## Common Issues
+Or edit locally, push, and auto-deploy triggers:
+```bash
+git add .
+git commit -m "changes"
+git push origin master
+```
 
-### Changes not showing up
-- **Cause:** Edited files on OptiPlex but didn't push to VPS
-- **Fix:** Follow deployment workflow above
-- **Prevention:** Always check `git log` on VPS to confirm latest commit
-
-### JavaScript not working
-- **Cause:** Browser caching old JS
-- **Fix:** Hard refresh browser (Ctrl+F5 or Cmd+Shift+R)
-- **Debug:** Check browser console (F12) for errors
-
-## Verification Commands
+## Manual Verification
 
 ```bash
 # Check VPS has latest code
-ssh openclaw@162.212.153.134 "cd /home/openclaw/kinawa-command-center && git log --oneline -3"
+ssh openclaw@162.212.153.134 "cd /home/openclaw/gfs-ordering && git log --oneline -3"
 
-# Check specific file content on VPS
-ssh openclaw@162.212.153.134 "grep 'search_term' /home/openclaw/kinawa-command-center/templates/file.html"
-
-# Test page is serving correctly
-ssh openclaw@162.212.153.134 "curl -s http://localhost:5000/gfs-ordering/ -u admin:kinawa2026 | head -20"
+# Check service status
+ssh openclaw@162.212.153.134 "sudo systemctl status gfs-ordering"
 ```
 
 ## File Locations
 
 | Location | Purpose |
 |----------|---------|
-| OptiPlex: `~/.openclaw/workspace/kinawa-command-center/` | Git repo, make edits here |
-| VPS: `/home/openclaw/kinawa-command-center/` | Production deployment |
-| GitHub: `behindthegarage/kinawa-command-center` | Source of truth |
-
-## Restart Service
-
-```bash
-ssh openclaw@162.212.153.134 "sudo systemctl restart kinawa"
-```
-
-Check status: `sudo systemctl status kinawa`
+| **VPS:** `/home/openclaw/gfs-ordering/` | ✅ Canonical — edit here |
+| **GitHub:** `behindthegarage/gfs-ordering` | Source of truth |
+| ~~OptiPlex~~ | ❌ Stale — deleted |

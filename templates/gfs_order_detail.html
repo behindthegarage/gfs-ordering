@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+
+{% block title %}{{ order.name or 'Order' }} - GFS Ordering{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="order-header">
+        <h1>{{ order.name or 'Untitled Order' }}</h1>
+        <div class="order-meta">
+            <span class="status-badge status-{{ order.status }}">{{ order.status }}</span>
+            <span class="meta-item">Created: {{ order.created_date }}</span>
+            {% if order.delivery_date %}
+            <span class="meta-item">Delivery: {{ order.delivery_date }}</span>
+            {% endif %}
+            <span class="meta-item total">Est. Total: ${{ "%.2f"|format(order.total_estimate or 0) }}</span>
+        </div>
+    </div>
+    
+    {% if order.notes %}
+    <div class="order-notes">
+        <strong>Notes:</strong> {{ order.notes }}
+    </div>
+    {% endif %}
+    
+    <div class="order-actions">
+        <button class="btn btn-primary" onclick="openAddItemModal()">+ Add Items</button>
+        <button class="btn btn-secondary" onclick="duplicateOrder()">Duplicate</button>
+        {% if order.status == 'draft' %}
+        <button class="btn btn-success" onclick="setStatus('ready')">Mark Ready</button>
+        {% elif order.status == 'ready' %}
+        <button class="btn btn-success" onclick="setStatus('submitted')">Mark Submitted</button>
+        {% endif %}
+        <a href="{{ url_for('gfs_ordering.index') }}" class="btn btn-secondary">← Back</a>
+    </div>
+    
+    <h2>Order Items</h2>
+    
+    {% if order.items %}
+    <table class="data-table order-items-table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Brand</th>
+                <th>Pack Size</th>
+                <th>Unit Price</th>
+                <th>Qty</th>
+                <th>Programs</th>
+                <th>Est. Cost</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in order.items %}
+            <tr data-item-id="{{ item.id }}">
+                <td>
+                    <div class="item-name">{{ item.description }}</div>
+                    <div class="item-code">{{ item.gfs_item_code }}</div>
+                </td>
+                <td>{{ item.brand }}</td>
+                <td>{{ item.pack_size }}</td>
+                <td>${{ "%.2f"|format(item.unit_price) }}</td>
+                <td>
+                    <input type="number" class="qty-input" value="{{ item.quantity }}" min="1"
+                           onchange="updateQuantity({{ item.id }}, this.value)">
+                </td>
+                <td>
+                    <div class="program-tags">
+                        {% set prog_list = item.programs|from_json if item.programs else [] %}
+                        {% for prog in prog_list %}
+                        <span class="program-tag">{{ prog }}</span>
+                        {% endfor %}
+                        <button class="btn btn-sm" onclick="editPrograms({{ item.id }}, {{ item.programs|tojson }})">+ Add</button>
+                    </div>
+                </td>
+                <td class="item-cost">${{ "%.2f"|format(item.quantity * item.unit_price) }}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="removeItem({{ item.id }})">×</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="6" align="right"><strong>Estimated Total:</strong></td>
+                <td colspan="2"><strong class="total-price">${{ "%.2f"|format(order.total_estimate or 0) }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <div class="programs-legend">
+        <h4>Programs</h4>
+        <div class="legend-grid">
+            {% for prog in programs %}
+            <div class="legend-item">
+                <span class="color-dot" style="background: {{ prog.color }}"></span>
+                <span>{{ prog.name }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No items in this order yet.</p>
+        <button class="btn btn-primary" onclick="openAddItemModal()">Add Items</button>
+    </div>
+    {% endif %}
+</div>
+
+
+<!-- Add Item Modal -->
+<div id="addItemModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Items to Order</h3>
+            <button class="close-btn" onclick="closeModal()">×</button>
+        </div>
+        
+        <div class="modal-body">
+            <input type="text" id="searchInput" placeholder="Search products..." class="search-box">
+            
+            <div id="searchResults" class="search-results">
+                <p class="help-text">Type to search products...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+let currentItemId = null;
+
+function openAddItemModal() {
+    document.getElementById('addItemModal').style.display = 'block';
+    document.getElementById('searchInput').focus();
+}
+
+function closeModal() {
+    document.getElementById('addItemModal').style.display = 'none';
+}
+
+// Search products
+let searchTimeout;
+document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value;
+    
+    if (query.length < 2) return;
+    
+    searchTimeout = setTimeout(() => {
+        fetch(`/gfs-ordering/api/search?q=${encodeURIComponent(query)}`)
+            .then(r => r.json())
+            .then(products => {
+                const results = document.getElementById('searchResults');
+                if (products.length === 0) {
+                    results.innerHTML = '<p class="help-text">No products found.</p>';
+                    return;
+                }
+                
+                results.innerHTML = products.map(p => `
+                    <div class="search-result-item" onclick="addProduct(${p.id})">
+                        <div class="result-name">${p.description}</div>
+                        <div class="result-meta">
+                            ${p.brand} • ${p.pack_size} • 
+                            <span class="result-price">$${p.unit_price.toFixed(2)}</span>
+                        </div>
+                    </div>
+                `).join('');
+            });
+    }, 200);
+});
+
+async function addProduct(productId) {
+    const response = await fetch(`/gfs-ordering/orders/{{ order.id }}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product_id: productId,
+            quantity: 1,
+            programs: []
+        })
+    });
+    
+    if (response.ok) {
+        location.reload();
+    }
+}
+
+async function updateQuantity(itemId, quantity) {
+    await fetch(`/gfs-ordering/orders/{{ order.id }}/items/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: parseInt(quantity) })
+    });
+    
+    // Update the cost display
+    location.reload();
+}
+
+async function removeItem(itemId) {
+    if (!confirm('Remove this item?')) return;
+    
+    await fetch(`/gfs-ordering/orders/{{ order.id }}/items/${itemId}`, {
+        method: 'DELETE'
+    });
+    
+    location.reload();
+}
+
+async function setStatus(status) {
+    await fetch(`/gfs-ordering/orders/{{ order.id }}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `status=${status}`
+    });
+    
+    location.reload();
+}
+
+async function duplicateOrder() {
+    const name = prompt('Name for duplicated order:', 'Copy of {{ order.name }}');
+    if (!name) return;
+    
+    await fetch(`/gfs-ordering/orders/{{ order.id }}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `name=${encodeURIComponent(name)}`
+    });
+    
+    window.location.href = '/gfs-ordering/orders';
+}
+
+function editPrograms(itemId, currentPrograms) {
+    // Simple prompt for now - could be a multi-select modal
+    const allPrograms = {{ programs|tojson }};
+    const options = allPrograms.map(p => p.short_code).join(', ');
+    const current = currentPrograms ? JSON.parse(currentPrograms) : [];
+    
+    const selected = prompt(`Select programs (${options}):`, current.join(', '));
+    if (selected === null) return;
+    
+    const programs = selected.split(',').map(s => s.trim()).filter(s => s);
+    
+    fetch(`/gfs-ordering/orders/{{ order.id }}/items/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ programs })
+    }).then(() => location.reload());
+}
+
+// Close modal on outside click
+window.onclick = function(event) {
+    const modal = document.getElementById('addItemModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
+</script>
+
+
+<style>
+.order-header {
+    margin-bottom: 1.5rem;
+}
+
+.order-meta {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+.meta-item {
+    color: var(--text-muted);
+}
+
+.meta-item.total {
+    color: var(--success);
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.order-notes {
+    background: var(--warning-bg, #fff3cd);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.order-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.order-items-table {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.item-name {
+    font-weight: 500;
+}
+
+.item-code {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.qty-input {
+    width: 60px;
+    padding: 0.25rem;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.program-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.program-tag {
+    background: var(--primary);
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+.item-cost {
+    font-weight: 500;
+}
+
+.total-price {
+    font-size: 1.25rem;
+    color: var(--success);
+}
+
+.programs-legend {
+    margin-top: 2rem;
+    padding: 1rem;
+    background: var(--card-bg);
+    border-radius: 8px;
+}
+
+.legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background: var(--bg);
+    margin: 5% auto;
+    padding: 0;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.modal-body {
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.search-box {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.search-results {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.search-result-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-result-item:hover {
+    background: var(--primary-bg);
+}
+
+.result-name {
+    font-weight: 500;
+}
+
+.result-meta {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.result-price {
+    color: var(--success);
+    font-weight: 500;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+</style>
+{% endblock %}

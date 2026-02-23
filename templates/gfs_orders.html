@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Orders - GFS Ordering{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Order History</h1>
+    
+    <div class="filter-bar">
+        <div class="filter-group">
+            <label>Status:</label>
+            <div class="filter-buttons">
+                <a href="{{ url_for('gfs_ordering.orders') }}" 
+                   class="filter-btn {% if not current_status %}active{% endif %}">All</a>
+                <a href="{{ url_for('gfs_ordering.orders', status='draft') }}"
+                   class="filter-btn {% if current_status == 'draft' %}active{% endif %}">Draft</a>
+                <a href="{{ url_for('gfs_ordering.orders', status='ready') }}"
+                   class="filter-btn {% if current_status == 'ready' %}active{% endif %}">Ready</a>
+                <a href="{{ url_for('gfs_ordering.orders', status='submitted') }}"
+                   class="filter-btn {% if current_status == 'submitted' %}active{% endif %}">Submitted</a>
+                <a href="{{ url_for('gfs_ordering.orders', status='completed') }}"
+                   class="filter-btn {% if current_status == 'completed' %}active{% endif %}">Completed</a>
+            </div>
+        </div>
+        
+        <a href="{{ url_for('gfs_ordering.new_order') }}" class="btn btn-primary">+ New Order</a>
+    </div>
+    
+    {% if orders %}
+    <table class="data-table orders-table">
+        <thead>
+            <tr>
+                <th>Order</th>
+                <th>Created</th>
+                <th>Delivery Date</th>
+                <th>Status</th>
+                <th>Est. Total</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('gfs_ordering.order_detail', order_id=order.id) }}" class="order-link">
+                        {{ order.name or 'Untitled Order' }}
+                    </a>
+                    {% if order.notes %}
+                    <span class="has-notes" title="{{ order.notes }}">📝</span>
+                    {% endif %}
+                </td>
+                <td>{{ order.created_date }}</td>
+                <td>
+                    {% if order.delivery_date %}
+                    {{ order.delivery_date }}
+                    {% else %}
+                    <span class="not-set">—</span>
+                    {% endif %}
+                </td>
+                <td><span class="status-badge status-{{ order.status }}">{{ order.status }}</span></td>
+                <td>${{ "%.2f"|format(order.total_estimate or 0) }}</td>
+                <td>
+                    <div class="action-buttons">
+                        <a href="{{ url_for('gfs_ordering.order_detail', order_id=order.id) }}" class="btn btn-sm">Edit</a>
+                        
+                        <form method="POST" action="{{ url_for('gfs_ordering.duplicate_order', order_id=order.id) }}" 
+                              style="display:inline">
+                            <input type="hidden" name="name" value="Copy of {{ order.name }}">
+                            <button type="submit" class="btn btn-sm btn-secondary">Duplicate</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No orders found.</p>
+        <a href="{{ url_for('gfs_ordering.new_order') }}" class="btn btn-primary">Create Your First Order</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-group label {
+    font-weight: 500;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.filter-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover {
+    background: var(--primary-bg);
+}
+
+.filter-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.orders-table {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.order-link {
+    font-weight: 500;
+}
+
+.has-notes {
+    margin-left: 0.5rem;
+    cursor: help;
+}
+
+.not-set {
+    color: var(--text-muted);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.empty-state .btn {
+    margin-top: 1rem;
+}
+</style>
+{% endblock %}

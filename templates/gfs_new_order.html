@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Create Order - GFS Ordering{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Create New Order</h1>
+    
+    <form id="orderForm" method="POST" action="{{ url_for('gfs_ordering.new_order') }}">
+        <div class="form-section">
+            <h3>Order Details</h3>
+            
+            <div class="form-group">
+                <label>Order Name</label>
+                <input type="text" name="name" placeholder="e.g., Weekly Snack Order - Week of Feb 24" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Delivery Date</label>
+                <input type="date" name="delivery_date" value="{{ suggested_date }}" required>
+                <p class="help-text">Suggested: Next Tuesday</p>
+            </div>
+            
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" rows="2" placeholder="Any special instructions..."></textarea>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create Order</button>
+            <a href="{{ url_for('gfs_ordering.index') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+    
+    <hr>
+    
+    <h3>Quick Start: Frequently Ordered Items</h3>
+    <p class="help-text">Click items to add them to your order (after creating)</p>
+    
+    <div class="product-grid">
+        {% for product in frequent_products %}
+        <div class="product-card" data-product-id="{{ product.id }}">
+            <div class="product-category">{{ product.category_name }}</div>
+            <div class="product-name">{{ product.description }}</div>
+            <div class="product-brand">{{ product.brand }}</div>
+            <div class="product-pack">{{ product.pack_size }}</div>
+            <div class="product-price">${{ "%.2f"|format(product.unit_price) }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+// Create order and redirect to detail page
+document.getElementById('orderForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    try {
+        const response = await fetch(this.action, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            window.location.href = `/gfs-ordering/orders/${result.order_id}`;
+        } else {
+            alert('Error creating order');
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Error creating order');
+    }
+});
+</script>
+
+<style>
+.form-section {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin: 1.5rem 0;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    max-width: 400px;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.help-text {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.product-card {
+    background: var(--card-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    opacity: 0.7;
+}
+
+.product-category {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.product-name {
+    font-weight: 600;
+    margin: 0.5rem 0 0.25rem;
+}
+
+.product-brand {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.product-pack {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0.5rem 0;
+}
+
+.product-price {
+    font-weight: bold;
+    color: var(--success);
+}
+</style>
+{% endblock %}

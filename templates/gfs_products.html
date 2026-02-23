@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Products - GFS Ordering{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Product Catalog</h1>
+    
+    <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="Search products..." value="{{ query }}">
+        
+        <select id="categoryFilter" onchange="filterCategory()">
+            <option value="">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat.category_code }}" {% if current_category == cat.category_code %}selected{% endif %}>
+                {{ cat.category_name }} ({{ cat.count }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div class="results-count">{{ products|length }} products found</div>
+    
+    <div class="product-grid">
+        {% for product in products %}
+        <div class="product-card">
+            <div class="product-category">{{ product.category_name }}</div>
+            <div class="product-name">{{ product.description }}</div>
+            <div class="product-brand">{{ product.brand }}</div>
+            <div class="product-meta">
+                <span class="product-code">{{ product.gfs_item_code }}</span>
+                <span class="product-pack">{{ product.pack_size }}</span>
+            </div>
+            <div class="product-price-row">
+                <span class="product-price">${{ "%.2f"|format(product.unit_price) }}</span>
+                <span class="product-orders">Ordered {{ product.order_count }}×</span>
+            </div>
+            
+            {% if product.price_history %}
+            <div class="price-history">
+                {% set history = product.price_history|from_json %}
+                {% if history|length > 1 %}
+                <span class="price-trend">
+                    {% set first_price = history[0].price %}
+                    {% set last_price = history[-1].price %}
+                    {% if last_price > first_price %}
+                    ↑ ${{ "%.2f"|format(last_price - first_price) }}
+                    {% elif last_price < first_price %}
+                    ↓ ${{ "%.2f"|format(first_price - last_price) }}
+                    {% else %}
+                    → Stable
+                    {% endif %}
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% if not products %}
+    <div class="empty-state">
+        <p>No products found matching your criteria.</p>
+    </div>
+    {% endif %}</div>
+
+<script>
+// Live search
+let searchTimeout;
+document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        const query = this.value;
+        const category = document.getElementById('categoryFilter').value;
+        window.location.href = `?q=${encodeURIComponent(query)}&category=${category}`;
+    }, 500);
+});
+
+function filterCategory() {
+    const category = document.getElementById('categoryFilter').value;
+    const query = document.getElementById('searchInput').value;
+    window.location.href = `?q=${encodeURIComponent(query)}&category=${category}`;
+}
+</script>
+
+<style>
+.filter-bar {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+}
+
+.filter-bar input,
+.filter-bar select {
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.filter-bar input {
+    flex: 1;
+    min-width: 250px;
+}
+
+.results-count {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.product-card {
+    background: var(--card-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: box-shadow 0.2s;
+}
+
+.product-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.product-category {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.product-name {
+    font-weight: 600;
+    margin: 0.5rem 0 0.25rem;
+    font-size: 1.05rem;
+}
+
+.product-brand {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.product-meta {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+    font-size: 0.85rem;
+}
+
+.product-code {
+    background: var(--tag-bg, #f0f0f0);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.product-pack {
+    color: var(--text-muted);
+}
+
+.product-price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.product-price {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--success);
+}
+
+.product-orders {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.price-history {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.price-trend {
+    color: var(--text-muted);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+</style>
+{% endblock %}
